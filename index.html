@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cupid Love Calculator 💕</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Poppins & Fredoka -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <!-- Firebase Standard Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase state & variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cupid-secret-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        let app, db, auth;
+        window.firebaseDb = null;
+        window.firebaseAppId = appId;
+
+        if (firebaseConfig) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            window.firebaseDb = db;
+
+            // Authentication Guard
+            const initAuth = async () => {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase initialized & authenticated!");
+                } catch (err) {
+                    console.error("Firebase auth error:", err);
+                }
+            };
+            initAuth();
+        }
+
+        // Expose Firebase helpers to global window scope for UI interactions
+        window.saveSecretSubmission = async (linkOwnerId, personBName, crushName) => {
+            if (!db) return;
+            try {
+                const targetCol = collection(db, 'artifacts', appId, 'public', 'data', `secrets_${linkOwnerId}`);
+                await addDoc(targetCol, {
+                    targetName: personBName,
+                    crushName: crushName,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (err) {
+                console.error("Error saving secret submission:", err);
+            }
+        };
+
+        window.listenForCapturedSecrets = (linkOwnerId, callback) => {
+            if (!db) return;
+            const targetCol = collection(db, 'artifacts', appId, 'public', 'data', `secrets_${linkOwnerId}`);
+            return onSnapshot(targetCol, (snapshot) => {
+                const secrets = [];
+                snapshot.forEach((doc) => {
+                    secrets.push({ id: doc.id, ...doc.data() });
+                });
+                callback(secrets);
+            }, (error) => {
+                console.error("Error listening for secrets:", error);
+            });
+        };
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        rosepink: {
+                            50: '#fff1f2',
+                            100: '#ffe4e6',
+                            200: '#fecdd3',
+                            300: '#fda4af',
+                            400: '#fb7185',
+                            500: '#f43f5e',
+                            600: '#e11d48',
+                        },
+                        candy: {
+                            purple: '#c084fc',
+                            light: '#fae8ff',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                        cute: ['Fredoka', 'cursive']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #ffe4e6 0%, #fae8ff 50%, #fed7aa 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Glassmorphism utility */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 10px 30px -5px rgba(244, 63, 94, 0.15), 0 0 15px rgba(255, 182, 193, 0.3);
+        }
+
+        /* Floating Hearts Background Animation */
+        .heart-particle {
+            position: absolute;
+            pointer-events: none;
+            animation: floatUp 8s infinite linear;
+            opacity: 0.6;
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(105vh) scale(0.5) rotate(0deg);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(-10vh) scale(1.2) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Heartbeat Animation */
+        .heart-pulse {
+            animation: pulseBeat 1.2s infinite ease-in-out;
+        }
+
+        @keyframes pulseBeat {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        /* Custom Gauge Stroke Animation */
+        .circle-meter {
+            transition: stroke-dashoffset 1.5s ease-in-out;
+        }
+
+        /* Hide scrollbar */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen relative text-slate-800 pb-10">
+
+    <!-- Floating Background Hearts Container -->
+    <div id="hearts-container" class="fixed inset-0 overflow-hidden pointer-events-none z-0"></div>
+
+    <!-- Sound Toggle Button -->
+    <button onclick="toggleAudio()" id="sound-toggle-btn" class="fixed top-4 right-4 z-40 bg-white/80 border border-rosepink-200 text-rosepink-500 w-10 h-10 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition">
+        <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+    </button>
+
+    <!-- Notification Toast Container -->
+    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 transform -translate-y-10 pointer-events-none w-11/12 max-w-sm">
+        <div class="glass-card bg-slate-900/90 text-white text-xs sm:text-sm px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border border-pink-400/30">
+            <span id="toast-message" class="flex items-center gap-2">
+                <i class="fa-solid fa-heart text-pink-400"></i> Link copied!
+            </span>
+            <button onclick="hideToast()" class="text-slate-400 hover:text-white ml-3">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Mobile Container -->
+    <main class="flex-1 flex flex-col items-center justify-start p-4 z-10 w-full max-w-md mx-auto">
+        
+        <!-- Header / Logo -->
+        <header class="text-center my-4 animate-fade-in">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rosepink-100 text-rosepink-500 text-3xl mb-2 shadow-inner border border-rosepink-200">
+                <i class="fa-solid fa-heart-pulse heart-pulse"></i>
+            </div>
+            <h1 class="font-cute text-3xl sm:text-4xl font-bold bg-gradient-to-r from-rosepink-600 to-purple-600 bg-clip-text text-transparent">
+                Cupid Calculator
+            </h1>
+            <p id="header-subtitle" class="text-xs sm:text-sm text-slate-600 font-medium mt-1">
+                Calculate your love score & share the magic with friends! ✨
+            </p>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="flex items-center justify-center gap-2 mb-4 w-full">
+            <button onclick="switchTab('calc')" id="tab-btn-calc" class="flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-calculator"></i> Love Calculator
+            </button>
+            <button onclick="switchTab('secret-create')" id="tab-btn-secret" class="flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-white/70 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200">
+                <i class="fa-solid fa-user-secret text-rosepink-500"></i> Create Secret Link
+            </button>
+            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="relative py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-white/70 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200">
+                <i class="fa-solid fa-list-check text-purple-500"></i> My Secret Log
+                <span id="secret-badge" class="hidden absolute -top-1 -right-1 bg-rosepink-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">0</span>
+            </button>
+        </div>
+
+        <!-- MAIN CARD -->
+        <section class="glass-card w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative transition-all duration-300 space-y-4">
+            
+            <!-- VIEW 1: CALCULATOR SECTION -->
+            <div id="calculator-section" class="space-y-4">
+                
+                <!-- Inputs Section -->
+                <div id="input-form-section" class="space-y-3">
+                    <div id="prank-welcome-banner" class="hidden p-3 bg-rosepink-50 border border-rosepink-200 rounded-2xl text-center space-y-0.5 mb-2">
+                        <p class="text-xs font-bold text-rosepink-600 flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Special Love Test Invited!
+                        </p>
+                        <p class="text-[11px] text-slate-500">Enter your name and your crush's name to see your true compatibility score!</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
+                            <i class="fa-solid fa-user text-rosepink-400 mr-1"></i> Your Name
+                        </label>
+                        <input type="text" id="person-a" placeholder="Enter your name..." 
+                            class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm transition font-medium shadow-sm">
+                    </div>
+
+                    <div class="flex justify-center -my-2 relative z-10">
+                        <div class="w-8 h-8 bg-rosepink-500 text-white rounded-full flex items-center justify-center text-xs shadow-lg border-2 border-white">
+                            <i class="fa-solid fa-heart"></i>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
+                            <i class="fa-solid fa-heart-circle-bolt text-rosepink-400 mr-1"></i> Partner / Crush Name
+                        </label>
+                        <input type="text" id="person-b" placeholder="Enter partner's name..." 
+                            class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm transition font-medium shadow-sm">
+                    </div>
+
+                    <button onclick="calculateLoveScore()" id="btn-calc" 
+                        class="w-full py-3.5 px-4 bg-gradient-to-r from-rosepink-500 to-pink-600 text-white font-cute text-lg rounded-2xl shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 mt-4">
+                        <span>Check Compatibility</span>
+                        <i class="fa-solid fa-sparkles"></i>
+                    </button>
+                </div>
+
+                <!-- Animated Loading State -->
+                <div id="loading-state" class="hidden py-8 flex flex-col items-center justify-center space-y-4">
+                    <div class="relative flex items-center justify-center">
+                        <i class="fa-solid fa-heart text-6xl text-rosepink-400 animate-ping opacity-75"></i>
+                        <i class="fa-solid fa-heart text-5xl text-rosepink-600 absolute"></i>
+                    </div>
+                    <p id="loading-status" class="text-sm font-semibold text-slate-600 animate-pulse">Consulting the Cupids...</p>
+                </div>
+
+                <!-- Result Display Section -->
+                <div id="result-section" class="hidden space-y-4 pt-2">
+                    
+                    <!-- Circular Progress Gauge -->
+                    <div class="relative w-44 h-44 mx-auto flex items-center justify-center">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                            <!-- Background Circle -->
+                            <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8" class="text-rosepink-100" fill="transparent" />
+                            <!-- Gauge Circle -->
+                            <circle id="gauge-circle" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8" 
+                                class="text-rosepink-500 circle-meter" 
+                                stroke-dasharray="263.89" 
+                                stroke-dashoffset="263.89" 
+                                stroke-linecap="round" 
+                                fill="transparent" />
+                        </svg>
+                        
+                        <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                            <span id="score-percentage" class="font-cute text-4xl font-bold text-rosepink-600">0%</span>
+                            <span id="score-label" class="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-0.5">MATCH SCORE</span>
+                        </div>
+                    </div>
+
+                    <!-- Match Headline & Description -->
+                    <div class="text-center space-y-1 bg-white/60 p-4 rounded-2xl border border-rosepink-100">
+                        <h3 id="result-title" class="font-cute text-xl font-bold text-slate-800">Soulmates Made in Heaven! 💕</h3>
+                        <p id="result-names" class="text-xs font-semibold text-rosepink-500"></p>
+                        <p id="result-desc" class="text-xs text-slate-600 pt-1 leading-relaxed"></p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-2 gap-2 pt-2">
+                        <button onclick="resetCalculator()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-rotate-left"></i> Check Again
+                        </button>
+                        <button onclick="shareResultCard()" class="py-2.5 px-3 bg-rosepink-500 hover:bg-rosepink-600 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-share-nodes"></i> Share Result
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- VIEW 2: CREATE SECRET LINK SECTION -->
+            <div id="secret-create-section" class="hidden space-y-4">
+                <div class="text-center space-y-1">
+                    <h2 class="font-cute text-xl font-bold text-slate-800">Create Your Secret Link 🤫</h2>
+                    <p class="text-xs text-slate-500">Send this link to a friend! When they check their love score, their secret crush will be sent directly to your Secret Log!</p>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
+                            Your Name / Nickname
+                        </label>
+                        <input type="text" id="owner-name-input" placeholder="e.g. Alex" 
+                            class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm font-medium shadow-sm">
+                    </div>
+
+                    <button onclick="generateSecretLink()" class="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-rosepink-500 text-white font-cute text-base rounded-2xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate My Secret Link
+                    </button>
+                </div>
+
+                <!-- Generated Link Output -->
+                <div id="generated-link-container" class="hidden pt-3 border-t border-rosepink-100 space-y-3">
+                    <div class="bg-purple-50 border border-purple-200 p-3 rounded-2xl space-y-2">
+                        <span class="text-[11px] font-bold text-purple-600 uppercase tracking-wider block">Your Secret Link:</span>
+                        <input type="text" id="generated-link-input" readonly class="w-full px-3 py-2 bg-white text-slate-700 text-xs rounded-xl border border-purple-200 outline-none font-mono">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="copyGeneratedLink()" class="py-2.5 px-3 bg-rosepink-500 hover:bg-rosepink-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-copy"></i> Copy Secret Link
+                        </button>
+                        <button onclick="shareGeneratedWhatsApp()" class="py-2.5 px-3 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-1.5">
+                            <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW 3: SECRET LOG DASHBOARD -->
+            <div id="dashboard-section" class="hidden space-y-4">
+                <div class="text-center space-y-1">
+                    <h2 class="font-cute text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-user-secret text-purple-500"></i> Secret Captured Crushes
+                    </h2>
+                    <p class="text-xs text-slate-500">Real-time list of friends who tested their score using your Secret Link!</p>
+                </div>
+
+                <div id="secrets-list" class="space-y-2.5 max-h-72 overflow-y-auto pr-1 no-scrollbar">
+                    <div id="no-secrets-msg" class="text-center py-8 text-slate-400 text-xs">
+                        <i class="fa-solid fa-heart-crack text-3xl mb-2 opacity-50 block"></i>
+                        No secret crushes captured yet. Create & share your link with friends!
+                    </div>
+                </div>
+            </div>
+
+            <!-- SHARE WEBSITE WITH FRIENDS SECTION -->
+            <div class="pt-4 border-t border-rosepink-200/50 space-y-3">
+                <div class="text-center space-y-1">
+                    <h2 class="font-cute text-base font-bold text-slate-800 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-paper-plane text-rosepink-500"></i> Share Website with Friends
+                    </h2>
+                    <p class="text-xs text-slate-500">Invite your friends to test their own love compatibility!</p>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="shareWhatsApp()" class="py-2.5 px-2 bg-emerald-500 text-white text-xs font-medium rounded-xl hover:bg-emerald-600 transition flex items-center justify-center gap-1 shadow-sm">
+                        <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
+                    </button>
+                    <button onclick="copyWebsiteLink()" class="py-2.5 px-2 bg-rosepink-500 text-white text-xs font-medium rounded-xl hover:bg-rosepink-600 transition flex items-center justify-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-link text-sm"></i> Copy Link
+                    </button>
+                    <button onclick="shareNativeLink()" class="py-2.5 px-2 bg-purple-500 text-white text-xs font-medium rounded-xl hover:bg-purple-600 transition flex items-center justify-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-share-nodes text-sm"></i> Share
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Footer / Disclaimer -->
+        <footer class="text-center mt-6 text-slate-500 text-xs space-y-1">
+            <p class="flex items-center justify-center gap-1 font-medium">
+                Made with <i class="fa-solid fa-heart text-rosepink-500 animate-pulse"></i> for romantic fun!
+            </p>
+            <p class="text-[11px] text-slate-400">Intended strictly for fun and romantic entertainment.</p>
+        </footer>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // DOM Elements
+        const heartsContainer = document.getElementById('hearts-container');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+
+        // State Variables
+        let activeTab = 'calc';
+        let secretOwnerId = null;
+        let secretOwnerName = null;
+        let unsubscribeListener = null;
+
+        // On Load Initializer
+        window.onload = function() {
+            createFloatingHearts();
+            checkUrlParameters();
+            initSecretLogOwner();
+        };
+
+        // Tab Switching Logic
+        function switchTab(tabName) {
+            activeTab = tabName;
+            
+            const calcSec = document.getElementById('calculator-section');
+            const secretSec = document.getElementById('secret-create-section');
+            const dashSec = document.getElementById('dashboard-section');
+
+            const btnCalc = document.getElementById('tab-btn-calc');
+            const btnSecret = document.getElementById('tab-btn-secret');
+            const btnDash = document.getElementById('tab-btn-dashboard');
+
+            // Hide all
+            calcSec.classList.add('hidden');
+            secretSec.classList.add('hidden');
+            dashSec.classList.add('hidden');
+
+            // Reset tab button styling
+            [btnCalc, btnSecret, btnDash].forEach(btn => {
+                btn.className = "flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-white/70 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200";
+            });
+
+            if (tabName === 'calc') {
+                calcSec.classList.remove('hidden');
+                btnCalc.className = "flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5";
+            } else if (tabName === 'secret-create') {
+                secretSec.classList.remove('hidden');
+                btnSecret.className = "flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5";
+            } else if (tabName === 'dashboard') {
+                dashSec.classList.remove('hidden');
+                btnDash.className = "relative py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-purple-600 text-white flex items-center justify-center gap-1.5";
+            }
+        }
+
+        // URL Parameters Handler (Detect when Person B opens Person A's link)
+        function checkUrlParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            secretOwnerId = urlParams.get('ref');
+            secretOwnerName = urlParams.get('from');
+
+            if (secretOwnerId) {
+                const banner = document.getElementById('prank-welcome-banner');
+                if (banner) {
+                    banner.classList.remove('hidden');
+                }
+            }
+        }
+
+        // Secret Log Owner Identifier (Stored in LocalStorage for Person A)
+        function initSecretLogOwner() {
+            let myOwnerId = localStorage.getItem('cupid_owner_id');
+            if (!myOwnerId) {
+                myOwnerId = 'usr_' + Math.random().toString(36).substring(2, 9);
+                localStorage.setItem('cupid_owner_id', myOwnerId);
+            }
+
+            // Start Listening for Secrets for Person A
+            if (window.listenForCapturedSecrets) {
+                startListeningForSecrets(myOwnerId);
+            } else {
+                setTimeout(() => {
+                    startListeningForSecrets(myOwnerId);
+                }, 1500);
+            }
+        }
+
+        function startListeningForSecrets(ownerId) {
+            if (unsubscribeListener) unsubscribeListener();
+            if (typeof window.listenForCapturedSecrets === 'function') {
+                unsubscribeListener = window.listenForCapturedSecrets(ownerId, (secrets) => {
+                    renderSecretLog(secrets);
+                });
+            }
+        }
+
+        function renderSecretLog(secrets) {
+            const listEl = document.getElementById('secrets-list');
+            const noSecretsMsg = document.getElementById('no-secrets-msg');
+            const badge = document.getElementById('secret-badge');
+
+            if (!secrets || secrets.length === 0) {
+                noSecretsMsg.classList.remove('hidden');
+                badge.classList.add('hidden');
+                return;
+            }
+
+            noSecretsMsg.classList.add('hidden');
+            badge.innerText = secrets.length;
+            badge.classList.remove('hidden');
+
+            listEl.innerHTML = '';
+            secrets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            secrets.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "p-3 bg-white/90 border border-purple-200 rounded-2xl shadow-sm space-y-1 transition hover:shadow-md";
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">
+                            <i class="fa-solid fa-user text-rosepink-500 mr-1"></i> ${escapeHtml(item.targetName)}
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-medium">${formatTime(item.timestamp)}</span>
+                    </div>
+                    <div class="text-xs text-purple-700 bg-purple-50 p-2 rounded-xl border border-purple-100 flex items-center justify-between">
+                        <span>Secret Crush:</span>
+                        <span class="font-bold text-rosepink-600">${escapeHtml(item.crushName)} 💕</span>
+                    </div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return '';
+            const d = new Date(isoString);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Secret Link Generator
+        function generateSecretLink() {
+            const name = document.getElementById('owner-name-input').value.trim() || 'Friend';
+            let myOwnerId = localStorage.getItem('cupid_owner_id');
+            if (!myOwnerId) {
+                myOwnerId = 'usr_' + Math.random().toString(36).substring(2, 9);
+                localStorage.setItem('cupid_owner_id', myOwnerId);
+            }
+
+            const baseUrl = getWebsiteUrl();
+            const fullSecretUrl = `${baseUrl}?ref=${encodeURIComponent(myOwnerId)}&from=${encodeURIComponent(name)}`;
+
+            document.getElementById('generated-link-input').value = fullSecretUrl;
+            document.getElementById('generated-link-container').classList.remove('hidden');
+
+            // Make sure listener is attached
+            startListeningForSecrets(myOwnerId);
+            showToast('Secret link generated! Share with your friends! 🤫');
+        }
+
+        function copyGeneratedLink() {
+            const linkInput = document.getElementById('generated-link-input');
+            try {
+                linkInput.select();
+                document.execCommand('copy');
+                showToast('Secret link copied to clipboard! 📋');
+            } catch (e) {
+                showToast('Copied link!');
+            }
+        }
+
+        function shareGeneratedWhatsApp() {
+            const link = document.getElementById('generated-link-input').value;
+            const text = `Hey! Calculate your love compatibility score with this cute calculator! 💕✨\n${link}`;
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        // Audio Context (Synthesizer for cute sound effects)
+        let soundEnabled = true;
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playCuteChime() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, now); // D5
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } catch (e) {}
+        }
+
+        function playCelebrateTone() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, index) => {
+                    const now = audioCtx.currentTime + (index * 0.08);
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                });
+            } catch (e) {}
+        }
+
+        function toggleAudio() {
+            soundEnabled = !soundEnabled;
+            const icon = document.getElementById('sound-icon');
+            if (soundEnabled) {
+                icon.className = 'fa-solid fa-volume-high';
+                showToast('Sound Effects Enabled 🔔');
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark';
+                showToast('Sound Effects Muted 🔕');
+            }
+        }
+
+        // Floating Hearts generator
+        function createFloatingHearts() {
+            const heartIcons = ['❤️', '💖', '💕', '💗', '💘', '🌸', '✨'];
+            for (let i = 0; i < 18; i++) {
+                const heart = document.createElement('div');
+                heart.className = 'heart-particle';
+                heart.innerText = heartIcons[Math.floor(Math.random() * heartIcons.length)];
+                heart.style.left = Math.random() * 100 + 'vw';
+                heart.style.animationDuration = (Math.random() * 5 + 5) + 's';
+                heart.style.animationDelay = (Math.random() * 5) + 's';
+                heart.style.fontSize = (Math.random() * 14 + 14) + 'px';
+                heartsContainer.appendChild(heart);
+            }
+        }
+
+        // Love Score Calculation Algorithm
+        function calculateLoveScore() {
+            const name1Input = document.getElementById('person-a');
+            const name2Input = document.getElementById('person-b');
+            const name1 = name1Input.value.trim();
+            const name2 = name2Input.value.trim();
+
+            if (!name1 || !name2) {
+                showToast('Please enter both names to calculate love score! 💕');
+                return;
+            }
+
+            // Secret Capture: If Person B came via Person A's Secret link, capture secrecy!
+            if (secretOwnerId && window.saveSecretSubmission) {
+                window.saveSecretSubmission(secretOwnerId, name1, name2);
+            }
+
+            playCuteChime();
+
+            // UI Animations State
+            document.getElementById('input-form-section').classList.add('hidden');
+            const loadingState = document.getElementById('loading-state');
+            loadingState.classList.remove('hidden');
+
+            const statusMessages = [
+                "Matching compatibility signals...",
+                "Analyzing heart rhythm...",
+                "Consulting Cupid's secret diary...",
+                "Calculating final love score..."
+            ];
+
+            let msgIndex = 0;
+            const statusInterval = setInterval(() => {
+                msgIndex = (msgIndex + 1) % statusMessages.length;
+                document.getElementById('loading-status').innerText = statusMessages[msgIndex];
+            }, 500);
+
+            setTimeout(() => {
+                clearInterval(statusInterval);
+                loadingState.classList.add('hidden');
+                displayResults(name1, name2);
+            }, 2200);
+        }
+
+        function displayResults(name1, name2) {
+            const resultSection = document.getElementById('result-section');
+            resultSection.classList.remove('hidden');
+
+            // Calculate Score based on name characters hash
+            const combined = (name1 + name2).toLowerCase().replace(/[^a-z]/g, '');
+            let hash = 0;
+            for (let i = 0; i < combined.length; i++) {
+                hash += combined.charCodeAt(i) * (i + 1);
+            }
+            // Ensure high/fun score range between 70% and 99%
+            const percentage = 70 + (hash % 30);
+
+            // Animate Number Counter
+            const scoreEl = document.getElementById('score-percentage');
+            let currentVal = 0;
+            const duration = 1500;
+            const stepTime = 20;
+            const steps = duration / stepTime;
+            const increment = percentage / steps;
+
+            const counter = setInterval(() => {
+                currentVal += increment;
+                if (currentVal >= percentage) {
+                    currentVal = percentage;
+                    clearInterval(counter);
+                    triggerConfetti();
+                    playCelebrateTone();
+                }
+                scoreEl.innerText = Math.floor(currentVal) + '%';
+            }, stepTime);
+
+            // Animate SVG Circle Meter
+            const circle = document.getElementById('gauge-circle');
+            const radius = circle.r.baseVal.value;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (percentage / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+
+            // Set Title & Description
+            document.getElementById('result-names').innerText = `${name1} & ${name2}`;
+
+            const titleEl = document.getElementById('result-title');
+            const descEl = document.getElementById('result-desc');
+
+            if (percentage >= 92) {
+                titleEl.innerText = "Perfect Soulmates! 💕";
+                descEl.innerText = "Your hearts beat in complete harmony! Cupid leaves standard 5-star ratings for a romance as sweet as yours.";
+            } else if (percentage >= 82) {
+                titleEl.innerText = "Match Made in Heaven! ✨";
+                descEl.innerText = "Incredible chemistry and strong sparks! You two bring out the sweetest smiles and brightest laughter in each other.";
+            } else {
+                titleEl.innerText = "Cute & Sweet Connection! 💖";
+                descEl.innerText = "A delightful pair filled with warmth, endless laughter, and high romantic potential.";
+            }
+        }
+
+        function triggerConfetti() {
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 75,
+                    spread: 60,
+                    origin: { y: 0.6 },
+                    colors: ['#f43f5e', '#fb7185', '#c084fc', '#ffe4e6']
+                });
+            }
+        }
+
+        function resetCalculator() {
+            document.getElementById('result-section').classList.add('hidden');
+            document.getElementById('input-form-section').classList.remove('hidden');
+            document.getElementById('person-a').value = '';
+            document.getElementById('person-b').value = '';
+            
+            // Reset Gauge
+            const circle = document.getElementById('gauge-circle');
+            circle.style.strokeDashoffset = 263.89;
+        }
+
+        // WEBSITE SHARING LOGIC
+        function getWebsiteUrl() {
+            return window.location.href.split('?')[0];
+        }
+
+        function copyWebsiteLink() {
+            const textToCopy = getWebsiteUrl();
+            
+            try {
+                const tempInput = document.createElement('input');
+                tempInput.value = textToCopy;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+                showToast('Website link copied to clipboard! 📋');
+            } catch (err) {
+                showToast('Failed to copy. Please copy manually.');
+            }
+        }
+
+        function shareWhatsApp() {
+            const link = getWebsiteUrl();
+            const text = `Hey! Check your love score compatibility with Cupid Calculator! 💕✨\n${link}`;
+            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        function shareNativeLink() {
+            const link = getWebsiteUrl();
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Cupid Love Calculator',
+                    text: 'Find out your love score! 💕',
+                    url: link
+                }).catch(() => {});
+            } else {
+                copyWebsiteLink();
+            }
+        }
+
+        function shareResultCard() {
+            const name1 = document.getElementById('person-a').value || 'Person A';
+            const name2 = document.getElementById('person-b').value || 'Person B';
+            const score = document.getElementById('score-percentage').innerText;
+            const shareText = `Love score between ${name1} & ${name2} is ${score}! Try yours now at ${getWebsiteUrl()} 💕`;
+
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Love Score Result',
+                    text: shareText,
+                    url: getWebsiteUrl()
+                }).catch(() => {});
+            } else {
+                copyWebsiteLink();
+            }
+        }
+
+        // Toast Helper
+        function showToast(message) {
+            toastMessage.innerHTML = `<i class="fa-solid fa-heart text-pink-400"></i> ${message}`;
+            toast.classList.remove('opacity-0', '-translate-y-10', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                hideToast();
+            }, 3000);
+        }
+
+        function hideToast() {
+            toast.classList.add('opacity-0', '-translate-y-10', 'pointer-events-none');
+            toast.classList.remove('opacity-100', 'translate-y-0');
+        }
+    </script>
+</body>
+</html>
