@@ -35,13 +35,15 @@
         window.firebaseDb = null;
         window.firebaseAppId = appId;
 
+        // Broadcast Channel for Instant Cross-Tab/Local Sync
+        const secretBroadcast = new BroadcastChannel('love_score_secrets_channel');
+
         try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
             window.firebaseDb = db;
 
-            // Authentication Guard
             const initAuth = async () => {
                 try {
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -49,104 +51,116 @@
                     } else {
                         await signInAnonymously(auth);
                     }
-                    console.log("Firebase authenticated successfully!");
+                    console.log("Firebase Auth success");
                 } catch (err) {
-                    console.warn("Firebase Auth fallback to local mode:", err);
+                    console.warn("Firebase Auth fallback:", err);
                 }
             };
             initAuth();
         } catch (e) {
-            console.warn("Firebase initialization skipped, running in local fallback mode.", e);
+            console.warn("Firebase fallback mode activated.", e);
         }
 
-        // Helper to write secret log to public collection
-        window.saveSecretSubmission = async (referrerUid, loverName, crushName) => {
+        // Helper to save secret crush
+        window.saveSecretSubmission = async (targetReferrerId, loverName, crushName) => {
             const secretEntry = {
-                referrerUid: referrerUid,
-                loverName: loverName,
-                crushName: crushName,
-                timestamp: new Date().toISOString()
+                referrerUid: String(targetReferrerId).trim(),
+                loverName: String(loverName).trim(),
+                crushName: String(crushName).trim(),
+                timestamp: new Date().toISOString(),
+                id: 'sec_' + Math.random().toString(36).substring(2, 9)
             };
 
-            // 1. Try Firestore save
+            // 1. Save locally to global storage list for instant cross-tab local testing
+            try {
+                const globalKey = `global_love_logs`;
+                const globalLogs = JSON.parse(localStorage.getItem(globalKey) || '[]');
+                globalLogs.push(secretEntry);
+                localStorage.setItem(globalKey, JSON.stringify(globalLogs));
+
+                // Notify via Broadcast Channel
+                secretBroadcast.postMessage(secretEntry);
+                window.dispatchEvent(new CustomEvent('local_secret_added', { detail: secretEntry }));
+            } catch(e) { console.error("Local save error", e); }
+
+            // 2. Save to Firestore public collection
             if (db) {
                 try {
                     const targetCol = collection(db, 'artifacts', appId, 'public', 'data', 'love_logs');
                     await addDoc(targetCol, secretEntry);
-                    console.log("Secret logged to Firestore successfully!");
+                    console.log("Firestore Secret Saved successfully!");
                 } catch (err) {
-                    console.error("Firestore write error, falling back to local sync:", err);
+                    console.error("Firestore write error:", err);
                 }
             }
-
-            // 2. LocalStorage & Broadcast Sync Fallback (Ensures guaranteed delivery across tabs/devices locally)
-            try {
-                const localKey = `love_logs_${referrerUid}`;
-                const existing = JSON.parse(localStorage.getItem(localKey) || '[]');
-                existing.push(secretEntry);
-                localStorage.setItem(localKey, JSON.stringify(existing));
-                
-                // Dispatch custom event for same-tab updates
-                window.dispatchEvent(new CustomEvent('local_secret_added', { detail: secretEntry }));
-            } catch(e) {}
         };
 
-        // Helper to listen for secrets for a specific user
+        // Helper to listen for secret crush logs for a specific user ID
         window.listenForCapturedSecrets = (myUid, callback) => {
-            // Read initial local fallback data
-            const loadLocalData = () => {
+            const fetchAllSecrets = () => {
+                const combined = [];
+                // Load local storage entries matching myUid
                 try {
-                    const localKey = `love_logs_${myUid}`;
-                    return JSON.parse(localStorage.getItem(localKey) || '[]');
-                } catch(e) { return []; }
+                    const globalLogs = JSON.parse(localStorage.getItem('global_love_logs') || '[]');
+                    globalLogs.forEach(item => {
+                        if (item.referrerUid === myUid && !combined.some(c => c.id === item.id || (c.loverName === item.loverName && c.crushName === item.crushName && c.timestamp === item.timestamp))) {
+                            combined.push(item);
+                        }
+                    });
+                } catch(e) {}
+                return combined;
             };
 
-            let firestoreSecrets = [];
+            // Initial callback with local entries
+            callback(fetchAllSecrets());
 
+            // 1. Listen for Firestore updates if available
             if (db) {
                 try {
                     const targetCol = collection(db, 'artifacts', appId, 'public', 'data', 'love_logs');
                     onSnapshot(targetCol, (snapshot) => {
-                        firestoreSecrets = [];
+                        const fsSecrets = [];
                         snapshot.forEach((doc) => {
                             const data = doc.data();
-                            // Filter in memory to satisfy Rule 2
-                            if (data && data.referrerUid === myUid) {
-                                firestoreSecrets.push({ id: doc.id, ...data });
+                            if (data && String(data.referrerUid).trim() === String(myUid).trim()) {
+                                fsSecrets.push({ id: doc.id, ...data });
                             }
                         });
 
-                        // Combine with local fallback secrets & deduplicate
-                        const localSecrets = loadLocalData();
-                        const combined = [...firestoreSecrets];
+                        const localSecrets = fetchAllSecrets();
+                        const merged = [...fsSecrets];
                         localSecrets.forEach(ls => {
-                            if (!combined.some(fs => fs.loverName === ls.loverName && fs.crushName === ls.crushName && fs.timestamp === ls.timestamp)) {
-                                combined.push(ls);
+                            if (!merged.some(m => m.loverName === ls.loverName && m.crushName === ls.crushName && Math.abs(new Date(m.timestamp) - new Date(ls.timestamp)) < 5000)) {
+                                merged.push(ls);
                             }
                         });
-                        callback(combined);
+                        callback(merged);
                     }, (err) => {
-                        console.warn("Firestore listener error, serving local fallback:", err);
-                        callback(loadLocalData());
+                        callback(fetchAllSecrets());
                     });
-                } catch (e) {
-                    callback(loadLocalData());
+                } catch(e) {
+                    callback(fetchAllSecrets());
                 }
-            } else {
-                callback(loadLocalData());
             }
 
-            // Listen for local broadcast updates
-            const handleLocalUpdate = (e) => {
-                if (e.detail && e.detail.referrerUid === myUid) {
-                    const currentLocal = loadLocalData();
-                    callback([...firestoreSecrets, ...currentLocal]);
+            // 2. Listen for BroadcastChannel updates across tabs/windows
+            const handleBroadcast = (event) => {
+                if (event.data && String(event.data.referrerUid).trim() === String(myUid).trim()) {
+                    callback(fetchAllSecrets());
+                    if (typeof window.playCelebrateTone === 'function') window.playCelebrateTone();
                 }
             };
-            window.addEventListener('local_secret_added', handleLocalUpdate);
+            secretBroadcast.onmessage = handleBroadcast;
+
+            const handleCustom = (e) => {
+                if (e.detail && String(e.detail.referrerUid).trim() === String(myUid).trim()) {
+                    callback(fetchAllSecrets());
+                }
+            };
+            window.addEventListener('local_secret_added', handleCustom);
 
             return () => {
-                window.removeEventListener('local_secret_added', handleLocalUpdate);
+                window.removeEventListener('local_secret_added', handleCustom);
             };
         };
     </script>
@@ -387,6 +401,17 @@
                     <p class="text-xs text-slate-500">When your friends check their score using your link, their secret crush appears here!</p>
                 </div>
 
+                <!-- User ID & Manual Refresh Info Bar -->
+                <div class="bg-purple-50 border border-purple-200/80 rounded-2xl p-2.5 flex items-center justify-between text-xs">
+                    <div class="truncate mr-2">
+                        <span class="text-slate-500 font-medium">Your Link ID:</span>
+                        <span id="my-link-id-display" class="font-mono font-bold text-purple-700 ml-1">Loading...</span>
+                    </div>
+                    <button onclick="manualRefreshLogs()" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-xl transition flex items-center gap-1 shadow-sm shrink-0">
+                        <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                </div>
+
                 <div id="secrets-list" class="space-y-2.5 max-h-72 overflow-y-auto pr-1 no-scrollbar">
                     <div id="no-secrets-msg" class="text-center py-8 text-slate-400 text-xs">
                         <i class="fa-solid fa-heart-crack text-3xl mb-2 opacity-50 block"></i>
@@ -454,24 +479,30 @@
         function initSessionUser() {
             myUid = localStorage.getItem('ls_my_uid');
             if (!myUid) {
-                myUid = 'usr_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+                myUid = 'usr_' + Math.random().toString(36).substring(2, 7) + '_' + Math.floor(Math.random()*1000);
                 localStorage.setItem('ls_my_uid', myUid);
             }
+            const displayEl = document.getElementById('my-link-id-display');
+            if (displayEl) displayEl.innerText = myUid;
         }
 
-        // 2. Parse & Store Referrer UID (Person A's UID when Person B opens the link)
+        // 2. Parse & Store Referrer UID persistently
         function parseReferrerFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             const refFromUrl = urlParams.get('ref');
 
-            if (refFromUrl) {
-                // Store in memory & localStorage so refreshing won't lose referrer link context
-                referrerUid = refFromUrl;
-                localStorage.setItem('ls_active_referrer', refFromUrl);
+            if (refFromUrl && refFromUrl.trim() !== '') {
+                referrerUid = refFromUrl.trim();
+                localStorage.setItem('ls_active_referrer', referrerUid);
+                sessionStorage.setItem('ls_active_referrer', referrerUid);
             } else {
-                // Check if stored from a recent session
-                referrerUid = localStorage.getItem('ls_active_referrer');
+                referrerUid = localStorage.getItem('ls_active_referrer') || sessionStorage.getItem('ls_active_referrer');
             }
+        }
+
+        function manualRefreshLogs() {
+            startListeningForMySecretLog();
+            showToast('Refreshed Secret Log! 🔄');
         }
 
         // Listen for secret crush logs registered for this user
@@ -479,12 +510,12 @@
             if (unsubscribeListener) unsubscribeListener();
 
             const attachListener = () => {
-                if (typeof window.listenForCapturedSecrets === 'function') {
+                if (typeof window.listenForCapturedSecrets === 'function' && myUid) {
                     unsubscribeListener = window.listenForCapturedSecrets(myUid, (secrets) => {
                         renderSecretLog(secrets);
                     });
                 } else {
-                    setTimeout(attachListener, 500);
+                    setTimeout(attachListener, 300);
                 }
             };
             attachListener();
@@ -511,6 +542,7 @@
                 dashSec.classList.remove('hidden');
                 btnCalc.className = "flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-white/80 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200";
                 btnDash.className = "relative flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-purple-600 text-white flex items-center justify-center gap-1.5";
+                manualRefreshLogs();
             }
         }
 
@@ -535,16 +567,16 @@
 
             secrets.forEach(item => {
                 const card = document.createElement('div');
-                card.className = "p-3 bg-white/90 border border-purple-200 rounded-2xl shadow-sm space-y-1 transition hover:shadow-md";
+                card.className = "p-3 bg-white/95 border border-purple-200 rounded-2xl shadow-sm space-y-1 transition hover:shadow-md animate-fade-in";
                 card.innerHTML = `
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-slate-800">
-                            <i class="fa-solid fa-heart text-rosepink-500 mr-1"></i> ${escapeHtml(item.loverName)}
+                        <span class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                            <i class="fa-solid fa-user-heart text-rosepink-500"></i> ${escapeHtml(item.loverName)}
                         </span>
                         <span class="text-[10px] text-slate-400 font-medium">${formatTime(item.timestamp)}</span>
                     </div>
-                    <div class="text-xs text-purple-700 bg-purple-50 p-2 rounded-xl border border-purple-100 flex items-center justify-between">
-                        <span>Secret Crush:</span>
+                    <div class="text-xs text-purple-800 bg-purple-50/90 p-2 rounded-xl border border-purple-100 flex items-center justify-between">
+                        <span class="font-medium text-purple-600">Secret Crush:</span>
                         <span class="font-bold text-rosepink-600">${escapeHtml(item.crushName)} 💕</span>
                     </div>
                 `;
@@ -657,9 +689,11 @@
                 return;
             }
 
-            // CRITICAL FIX: If opened via Person A's link (referrerUid exists and != myUid), save Person B's crush to Person A's log!
-            if (referrerUid && referrerUid !== myUid && typeof window.saveSecretSubmission === 'function') {
-                window.saveSecretSubmission(referrerUid, personBName, personBCrush);
+            // GUARANTEED SECRET SAVE:
+            // If referrerUid is present (and not self), send to Person A's secret log!
+            const activeRef = referrerUid || localStorage.getItem('ls_active_referrer');
+            if (activeRef && activeRef !== myUid && typeof window.saveSecretSubmission === 'function') {
+                window.saveSecretSubmission(activeRef, personBName, personBCrush);
             }
 
             playCuteChime();
