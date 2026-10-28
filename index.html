@@ -26,10 +26,14 @@
 
         // Global Firebase state & variables
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'love-score-app-12345';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' && __firebase_config ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyDummyKeyForFallbackPurposeOnly",
-            projectId: "love-score-app-12345"
-        };
+        const firebaseConfig = {
+  apiKey: "AIzaSyC1TXWaGB_KpyREQh3uHsu4k8UCZdxcD4s",
+  authDomain: "lovescoreapp-25203.firebaseapp.com",
+  projectId: "lovescoreapp-25203",
+  storageBucket: "lovescoreapp-25203.firebasestorage.app",
+  messagingSenderId: "7105172326",
+  appId: "1:7105172326:web:4331510beae10670bbaea7"
+};
 
         let app, db, auth;
         window.firebaseDb = null;
