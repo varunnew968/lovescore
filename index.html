@@ -1,23 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
+    <script data-cfasync="false" src="https://bicea.org/14/8e75d2e21703f3006e82d07ce1e51296"></script>
+    <script src="https://pl32069423.profitableratecpmnetwork.com/79/4a/e6/794ae68609481f2429e5f6ab719ddfe8.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Love Score 💕 - Check Your Compatibility</title>
     <!-- Heart Favicon (SVG Data URI) -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💖</text></svg>">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💖</text></svg>">
     <!-- Apple Touch Icon for Mobile Home Screen -->
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23ffe4e6'/><text x='50%' y='55%' dominant-baseline='central' text-anchor='middle' font-size='65'>💖</text></svg>">
-    
+    <link rel="apple-touch-icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23ffe4e6'/><text x='50%' y='55%' dominant-baseline='central' text-anchor='middle' font-size='65'>💖</text></svg>">
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts: Poppins & Fredoka -->
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <!-- Canvas Confetti CDN -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-    
+
     <!-- Firebase Standard Imports -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -27,13 +34,13 @@
         // Global Firebase state & variables
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'love-score-app-12345';
         const firebaseConfig = {
-  apiKey: "AIzaSyC1TXWaGB_KpyREQh3uHsu4k8UCZdxcD4s",
-  authDomain: "lovescoreapp-25203.firebaseapp.com",
-  projectId: "lovescoreapp-25203",
-  storageBucket: "lovescoreapp-25203.firebasestorage.app",
-  messagingSenderId: "7105172326",
-  appId: "1:7105172326:web:4331510beae10670bbaea7"
-};
+            apiKey: "AIzaSyC1TXWaGB_KpyREQh3uHsu4k8UCZdxcD4s",
+            authDomain: "lovescoreapp-25203.firebaseapp.com",
+            projectId: "lovescoreapp-25203",
+            storageBucket: "lovescoreapp-25203.firebasestorage.app",
+            messagingSenderId: "7105172326",
+            appId: "1:7105172326:web:4331510beae10670bbaea7"
+        };
 
         let app, db, auth;
         window.firebaseDb = null;
@@ -85,7 +92,7 @@
                 // Notify via Broadcast Channel
                 secretBroadcast.postMessage(secretEntry);
                 window.dispatchEvent(new CustomEvent('local_secret_added', { detail: secretEntry }));
-            } catch(e) { console.error("Local save error", e); }
+            } catch (e) { console.error("Local save error", e); }
 
             // 2. Save to Firestore public collection
             if (db) {
@@ -111,7 +118,7 @@
                             combined.push(item);
                         }
                     });
-                } catch(e) {}
+                } catch (e) { }
                 return combined;
             };
 
@@ -142,7 +149,7 @@
                     }, (err) => {
                         callback(fetchAllSecrets());
                     });
-                } catch(e) {
+                } catch (e) {
                     callback(fetchAllSecrets());
                 }
             }
@@ -226,6 +233,7 @@
                 transform: translateY(105vh) scale(0.5) rotate(0deg);
                 opacity: 0.8;
             }
+
             100% {
                 transform: translateY(-10vh) scale(1.2) rotate(360deg);
                 opacity: 0;
@@ -238,8 +246,15 @@
         }
 
         @keyframes pulseBeat {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.15); }
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.15);
+            }
         }
 
         /* Custom Gauge Stroke Animation */
@@ -251,25 +266,30 @@
         .no-scrollbar::-webkit-scrollbar {
             display: none;
         }
+
         .no-scrollbar {
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
     </style>
 </head>
+
 <body class="flex flex-col min-h-screen relative text-slate-800 pb-10">
 
     <!-- Floating Background Hearts Container -->
     <div id="hearts-container" class="fixed inset-0 overflow-hidden pointer-events-none z-0"></div>
 
     <!-- Sound Toggle Button -->
-    <button onclick="toggleAudio()" id="sound-toggle-btn" class="fixed top-4 right-4 z-40 bg-white/80 border border-rosepink-200 text-rosepink-500 w-10 h-10 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition">
+    <button onclick="toggleAudio()" id="sound-toggle-btn"
+        class="fixed top-4 right-4 z-40 bg-white/80 border border-rosepink-200 text-rosepink-500 w-10 h-10 rounded-full flex items-center justify-center shadow-md hover:scale-105 transition">
         <i class="fa-solid fa-volume-high" id="sound-icon"></i>
     </button>
 
     <!-- Notification Toast Container -->
-    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 transform -translate-y-10 pointer-events-none w-11/12 max-w-sm">
-        <div class="glass-card bg-slate-900/90 text-white text-xs sm:text-sm px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border border-pink-400/30">
+    <div id="toast"
+        class="fixed top-5 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 transform -translate-y-10 pointer-events-none w-11/12 max-w-sm">
+        <div
+            class="glass-card bg-slate-900/90 text-white text-xs sm:text-sm px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between border border-pink-400/30">
             <span id="toast-message" class="flex items-center gap-2">
                 <i class="fa-solid fa-heart text-pink-400"></i> Link copied!
             </span>
@@ -281,13 +301,15 @@
 
     <!-- Main Mobile Container -->
     <main class="flex-1 flex flex-col items-center justify-start p-4 z-10 w-full max-w-md mx-auto">
-        
+
         <!-- Header / Logo -->
         <header class="text-center my-4 animate-fade-in relative w-full">
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rosepink-100 text-rosepink-500 text-3xl mb-2 shadow-inner border border-rosepink-200">
+            <div
+                class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rosepink-100 text-rosepink-500 text-3xl mb-2 shadow-inner border border-rosepink-200">
                 <i class="fa-solid fa-heart-pulse heart-pulse"></i>
             </div>
-            <h1 class="font-cute text-3xl sm:text-4xl font-bold bg-gradient-to-r from-rosepink-600 to-purple-600 bg-clip-text text-transparent">
+            <h1
+                class="font-cute text-3xl sm:text-4xl font-bold bg-gradient-to-r from-rosepink-600 to-purple-600 bg-clip-text text-transparent">
                 Love Score
             </h1>
             <p id="header-subtitle" class="text-xs sm:text-sm text-slate-600 font-medium mt-1">
@@ -297,33 +319,38 @@
 
         <!-- Secret Log & Calculator Tab Toggle -->
         <div class="flex items-center justify-center gap-2 mb-4 w-full">
-            <button onclick="switchTab('calc')" id="tab-btn-calc" class="flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5">
+            <button onclick="switchTab('calc')" id="tab-btn-calc"
+                class="flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-rosepink-500 text-white flex items-center justify-center gap-1.5">
                 <i class="fa-solid fa-heart text-white"></i> Love Score Test
             </button>
-            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="relative flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-white/80 text-purple-700 hover:bg-white flex items-center justify-center gap-1.5 border border-purple-200">
+            <button onclick="switchTab('dashboard')" id="tab-btn-dashboard"
+                class="relative flex-1 py-2.5 px-4 rounded-2xl text-xs font-bold transition shadow-sm bg-white/80 text-purple-700 hover:bg-white flex items-center justify-center gap-1.5 border border-purple-200">
                 <i class="fa-solid fa-user-secret text-purple-500"></i> My Secret Log
-                <span id="secret-badge" class="hidden absolute -top-1 -right-1 bg-rosepink-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-white">0</span>
+                <span id="secret-badge"
+                    class="hidden absolute -top-1 -right-1 bg-rosepink-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-white">0</span>
             </button>
         </div>
 
         <!-- MAIN CARD -->
-        <section class="glass-card w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative transition-all duration-300 space-y-4">
-            
+        <section
+            class="glass-card w-full rounded-3xl p-5 sm:p-6 shadow-2xl relative transition-all duration-300 space-y-4">
+
             <!-- VIEW 1: CALCULATOR SECTION -->
             <div id="calculator-section" class="space-y-4">
-                
+
                 <!-- Inputs Section -->
                 <div id="input-form-section" class="space-y-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
                             <i class="fa-solid fa-user text-rosepink-400 mr-1"></i> Your Name
                         </label>
-                        <input type="text" id="person-a" placeholder="Enter your name..." 
+                        <input type="text" id="person-a" placeholder="Enter your name..."
                             class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm transition font-medium shadow-sm">
                     </div>
 
                     <div class="flex justify-center -my-2 relative z-10">
-                        <div class="w-8 h-8 bg-rosepink-500 text-white rounded-full flex items-center justify-center text-xs shadow-lg border-2 border-white">
+                        <div
+                            class="w-8 h-8 bg-rosepink-500 text-white rounded-full flex items-center justify-center text-xs shadow-lg border-2 border-white">
                             <i class="fa-solid fa-heart"></i>
                         </div>
                     </div>
@@ -332,11 +359,11 @@
                         <label class="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">
                             <i class="fa-solid fa-heart-circle-bolt text-rosepink-400 mr-1"></i> Partner / Crush Name
                         </label>
-                        <input type="text" id="person-b" placeholder="Enter crush's name..." 
+                        <input type="text" id="person-b" placeholder="Enter crush's name..."
                             class="w-full px-4 py-3 rounded-2xl bg-white/80 border border-rosepink-200 focus:border-rosepink-500 focus:ring-2 focus:ring-rosepink-300 outline-none text-slate-800 text-sm transition font-medium shadow-sm">
                     </div>
 
-                    <button onclick="calculateLoveScore()" id="btn-calc" 
+                    <button onclick="calculateLoveScore()" id="btn-calc"
                         class="w-full py-3.5 px-4 bg-gradient-to-r from-rosepink-500 to-pink-600 text-white font-cute text-lg rounded-2xl shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 mt-4">
                         <span>Check Love Score</span>
                         <i class="fa-solid fa-sparkles"></i>
@@ -349,45 +376,65 @@
                         <i class="fa-solid fa-heart text-6xl text-rosepink-400 animate-ping opacity-75"></i>
                         <i class="fa-solid fa-heart text-5xl text-rosepink-600 absolute"></i>
                     </div>
-                    <p id="loading-status" class="text-sm font-semibold text-slate-600 animate-pulse">Calculating Love Score...</p>
+                    <p id="loading-status" class="text-sm font-semibold text-slate-600 animate-pulse">Calculating Love
+                        Score...</p>
                 </div>
 
                 <!-- Result Display Section -->
                 <div id="result-section" class="hidden space-y-4 pt-2">
-                    
+
                     <!-- Circular Progress Gauge -->
                     <div class="relative w-44 h-44 mx-auto flex items-center justify-center">
                         <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                             <!-- Background Circle -->
-                            <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8" class="text-rosepink-100" fill="transparent" />
+                            <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8"
+                                class="text-rosepink-100" fill="transparent" />
                             <!-- Gauge Circle -->
-                            <circle id="gauge-circle" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8" 
-                                class="text-rosepink-500 circle-meter" 
-                                stroke-dasharray="263.89" 
-                                stroke-dashoffset="263.89" 
-                                stroke-linecap="round" 
-                                fill="transparent" />
+                            <circle id="gauge-circle" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="8"
+                                class="text-rosepink-500 circle-meter" stroke-dasharray="263.89"
+                                stroke-dashoffset="263.89" stroke-linecap="round" fill="transparent" />
                         </svg>
-                        
+
                         <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
                             <span id="score-percentage" class="font-cute text-4xl font-bold text-rosepink-600">0%</span>
-                            <span id="score-label" class="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-0.5">LOVE SCORE</span>
+                            <span id="score-label"
+                                class="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-0.5">LOVE
+                                SCORE</span>
                         </div>
                     </div>
 
                     <!-- Match Headline & Description -->
                     <div class="text-center space-y-1 bg-white/60 p-4 rounded-2xl border border-rosepink-100">
-                        <h3 id="result-title" class="font-cute text-xl font-bold text-slate-800">Soulmates Made in Heaven! 💕</h3>
+                        <h3 id="result-title" class="font-cute text-xl font-bold text-slate-800">Soulmates Made in
+                            Heaven! 💕</h3>
                         <p id="result-names" class="text-xs font-semibold text-rosepink-500"></p>
                         <p id="result-desc" class="text-xs text-slate-600 pt-1 leading-relaxed"></p>
                     </div>
 
+                    <!-- Adsterra 300x250 Banner Ad Placement (Under Result Card) -->
+                    <div
+                        class="flex justify-center my-3 overflow-hidden rounded-2xl shadow-sm border border-rosepink-100 bg-white/50 py-2">
+                        <script type="text/javascript">
+                            atOptions = {
+                                'key': '918f6b0998d97d3ffdbe04e4223b9477',
+                                'format': 'iframe',
+                                'height': 250,
+                                'width': 300,
+                                'params': {}
+                            };
+                        </script>
+                        <script type="text/javascript"
+                            src="https://bicea.org/22/918f6b0998d97d3ffdbe04e4223b9477"></script>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="grid grid-cols-2 gap-2 pt-2">
-                        <button onclick="resetCalculator()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5">
+                        <button onclick="resetCalculator()"
+                            class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-1.5">
                             <i class="fa-solid fa-rotate-left"></i> Check Again
                         </button>
-                        <button onclick="shareResultCard()" class="py-2.5 px-3 bg-rosepink-500 hover:bg-rosepink-600 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center justify-center gap-1.5">
+                        <button onclick="shareResultCard()"
+                            class="py-2.5 px-3 bg-rosepink-500 hover:bg-rosepink-600 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center justify-center gap-1.5">
                             <i class="fa-solid fa-share-nodes"></i> Share Score
                         </button>
                     </div>
@@ -402,16 +449,19 @@
                     <h2 class="font-cute text-xl font-bold text-slate-800 flex items-center justify-center gap-2">
                         <i class="fa-solid fa-user-secret text-purple-500"></i> Secret Captured Crushes
                     </h2>
-                    <p class="text-xs text-slate-500">When your friends check their score using your link, their secret crush appears here!</p>
+                    <p class="text-xs text-slate-500">When your friends check their score using your link, their secret
+                        crush appears here!</p>
                 </div>
 
                 <!-- User ID & Manual Refresh Info Bar -->
-                <div class="bg-purple-50 border border-purple-200/80 rounded-2xl p-2.5 flex items-center justify-between text-xs">
+                <div
+                    class="bg-purple-50 border border-purple-200/80 rounded-2xl p-2.5 flex items-center justify-between text-xs">
                     <div class="truncate mr-2">
                         <span class="text-slate-500 font-medium">Your Link ID:</span>
                         <span id="my-link-id-display" class="font-mono font-bold text-purple-700 ml-1">Loading...</span>
                     </div>
-                    <button onclick="manualRefreshLogs()" class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-xl transition flex items-center gap-1 shadow-sm shrink-0">
+                    <button onclick="manualRefreshLogs()"
+                        class="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold rounded-xl transition flex items-center gap-1 shadow-sm shrink-0">
                         <i class="fa-solid fa-rotate-right"></i> Refresh
                     </button>
                 </div>
@@ -422,6 +472,21 @@
                         No secret crushes captured yet.<br>Share the website link with your friends!
                     </div>
                 </div>
+
+                <!-- Adsterra 300x250 Banner Ad Placement (In Dashboard View) -->
+                <div
+                    class="flex justify-center my-3 overflow-hidden rounded-2xl shadow-sm border border-purple-100 bg-white/50 py-2">
+                    <script type="text/javascript">
+                        atOptions = {
+                            'key': '918f6b0998d97d3ffdbe04e4223b9477',
+                            'format': 'iframe',
+                            'height': 250,
+                            'width': 300,
+                            'params': {}
+                        };
+                    </script>
+                    <script type="text/javascript" src="https://bicea.org/22/918f6b0998d97d3ffdbe04e4223b9477"></script>
+                </div>
             </div>
 
             <!-- SHARE WEBSITE WITH FRIENDS SECTION -->
@@ -430,17 +495,21 @@
                     <h2 class="font-cute text-base font-bold text-slate-800 flex items-center justify-center gap-1.5">
                         <i class="fa-solid fa-paper-plane text-rosepink-500"></i> Share Love Score with Friends
                     </h2>
-                    <p class="text-xs text-slate-500">Share your unique link to find out your friends' secret crushes!</p>
+                    <p class="text-xs text-slate-500">Share your unique link to find out your friends' secret crushes!
+                    </p>
                 </div>
 
                 <div class="grid grid-cols-3 gap-2">
-                    <button onclick="shareWhatsApp()" class="py-2.5 px-2 bg-emerald-500 text-white text-xs font-medium rounded-xl hover:bg-emerald-600 transition flex items-center justify-center gap-1 shadow-sm">
+                    <button onclick="shareWhatsApp()"
+                        class="py-2.5 px-2 bg-emerald-500 text-white text-xs font-medium rounded-xl hover:bg-emerald-600 transition flex items-center justify-center gap-1 shadow-sm">
                         <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
                     </button>
-                    <button onclick="copyWebsiteLink()" class="py-2.5 px-2 bg-rosepink-500 text-white text-xs font-medium rounded-xl hover:bg-rosepink-600 transition flex items-center justify-center gap-1 shadow-sm">
+                    <button onclick="copyWebsiteLink()"
+                        class="py-2.5 px-2 bg-rosepink-500 text-white text-xs font-medium rounded-xl hover:bg-rosepink-600 transition flex items-center justify-center gap-1 shadow-sm">
                         <i class="fa-solid fa-link text-sm"></i> Copy Link
                     </button>
-                    <button onclick="shareNativeLink()" class="py-2.5 px-2 bg-purple-500 text-white text-xs font-medium rounded-xl hover:bg-purple-600 transition flex items-center justify-center gap-1 shadow-sm">
+                    <button onclick="shareNativeLink()"
+                        class="py-2.5 px-2 bg-purple-500 text-white text-xs font-medium rounded-xl hover:bg-purple-600 transition flex items-center justify-center gap-1 shadow-sm">
                         <i class="fa-solid fa-share-nodes text-sm"></i> Share
                     </button>
                 </div>
@@ -472,7 +541,7 @@
         let unsubscribeListener = null;
 
         // On Load Initializer
-        window.onload = function() {
+        window.onload = function () {
             createFloatingHearts();
             initSessionUser();
             parseReferrerFromUrl();
@@ -483,7 +552,7 @@
         function initSessionUser() {
             myUid = localStorage.getItem('ls_my_uid');
             if (!myUid) {
-                myUid = 'usr_' + Math.random().toString(36).substring(2, 7) + '_' + Math.floor(Math.random()*1000);
+                myUid = 'usr_' + Math.random().toString(36).substring(2, 7) + '_' + Math.floor(Math.random() * 1000);
                 localStorage.setItem('ls_my_uid', myUid);
             }
             const displayEl = document.getElementById('my-link-id-display');
@@ -528,7 +597,7 @@
         // Tab Switching Logic
         function switchTab(tabName) {
             activeTab = tabName;
-            
+
             const calcSec = document.getElementById('calculator-section');
             const dashSec = document.getElementById('dashboard-section');
 
@@ -630,7 +699,7 @@
                 gain.connect(audioCtx.destination);
                 osc.start(now);
                 osc.stop(now + 0.3);
-            } catch (e) {}
+            } catch (e) { }
         }
 
         function playCelebrateTone() {
@@ -651,7 +720,7 @@
                     osc.start(now);
                     osc.stop(now + 0.25);
                 });
-            } catch (e) {}
+            } catch (e) { }
         }
 
         function toggleAudio() {
@@ -798,7 +867,7 @@
             document.getElementById('input-form-section').classList.remove('hidden');
             document.getElementById('person-a').value = '';
             document.getElementById('person-b').value = '';
-            
+
             const circle = document.getElementById('gauge-circle');
             circle.style.strokeDashoffset = 263.89;
         }
@@ -832,7 +901,7 @@
                     title: 'Love Score Calculator',
                     text: 'Calculate your true love score! 💕',
                     url: link
-                }).catch(() => {});
+                }).catch(() => { });
             } else {
                 copyWebsiteLink();
             }
@@ -849,7 +918,7 @@
                     title: 'Love Score Result',
                     text: shareText,
                     url: getWebsiteShareUrl()
-                }).catch(() => {});
+                }).catch(() => { });
             } else {
                 copyWebsiteLink();
             }
@@ -872,4 +941,5 @@
         }
     </script>
 </body>
+
 </html>
